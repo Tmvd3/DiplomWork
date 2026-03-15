@@ -30,6 +30,7 @@ class EmailTwoFactorAuthenticationTest extends TestCase
         $this->assertGuest();
         $this->assertSame($user->id, session('auth.two_factor.user_id'));
         $this->assertTrue((bool) session('auth.two_factor.remember'));
+        $this->assertSame('login', session('auth.two_factor.intent'));
 
         $code = null;
 
@@ -37,6 +38,7 @@ class EmailTwoFactorAuthenticationTest extends TestCase
             $user,
             EmailTwoFactorCodeNotification::class,
             function (EmailTwoFactorCodeNotification $notification) use (&$code) {
+                $this->assertSame('login', $notification->intent);
                 $code = $notification->code;
 
                 return true;
@@ -50,6 +52,7 @@ class EmailTwoFactorAuthenticationTest extends TestCase
         $this->assertAuthenticatedAs($user);
         $this->assertNull($user->fresh()->email_two_factor_code);
         $this->assertNull(session('auth.two_factor.user_id'));
+        $this->assertNull(session('auth.two_factor.intent'));
     }
 
     public function test_register_starts_two_factor_flow_without_immediate_login(): void
@@ -69,7 +72,26 @@ class EmailTwoFactorAuthenticationTest extends TestCase
         $this->assertNotNull($user);
         $this->assertGuest();
         $this->assertSame($user?->id, session('auth.two_factor.user_id'));
+        $this->assertSame('register', session('auth.two_factor.intent'));
 
-        Notification::assertSentTo($user, EmailTwoFactorCodeNotification::class);
+        $code = null;
+
+        Notification::assertSentTo(
+            $user,
+            EmailTwoFactorCodeNotification::class,
+            function (EmailTwoFactorCodeNotification $notification) use (&$code) {
+                $this->assertSame('register', $notification->intent);
+                $code = $notification->code;
+
+                return true;
+            }
+        );
+
+        $this->post(route('two-factor.verify'), [
+            'code' => $code,
+        ])->assertRedirect('/dashboard');
+
+        $this->assertAuthenticatedAs($user);
+        $this->assertNull(session('auth.two_factor.intent'));
     }
 }

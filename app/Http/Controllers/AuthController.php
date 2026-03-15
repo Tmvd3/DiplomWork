@@ -15,7 +15,10 @@ class AuthController extends Controller
 {
     private const TWO_FACTOR_USER_ID = 'auth.two_factor.user_id';
     private const TWO_FACTOR_REMEMBER = 'auth.two_factor.remember';
+    private const TWO_FACTOR_INTENT = 'auth.two_factor.intent';
     private const TWO_FACTOR_TTL_MINUTES = 10;
+    private const TWO_FACTOR_INTENT_LOGIN = 'login';
+    private const TWO_FACTOR_INTENT_REGISTER = 'register';
 
     private function passwordRules(): array
     {
@@ -60,6 +63,7 @@ class AuthController extends Controller
             $request,
             $user,
             false,
+            self::TWO_FACTOR_INTENT_REGISTER,
             'Аккаунт создан. Мы отправили код подтверждения на вашу почту.',
         );
     }
@@ -102,6 +106,7 @@ class AuthController extends Controller
                 $request,
                 $user,
                 $request->boolean('remember'),
+                self::TWO_FACTOR_INTENT_LOGIN,
                 'Мы отправили код подтверждения на вашу почту.',
             );
         }
@@ -124,6 +129,7 @@ class AuthController extends Controller
         return view('auth.two-factor', [
             'email' => $user->email,
             'maskedEmail' => $this->maskEmail($user->email),
+            'intent' => $this->getPendingTwoFactorIntent($request),
         ]);
     }
 
@@ -165,13 +171,20 @@ class AuthController extends Controller
         }
 
         $remember = (bool) $request->session()->get(self::TWO_FACTOR_REMEMBER, false);
+        $intent = $this->getPendingTwoFactorIntent($request);
 
         $this->clearTwoFactorChallenge($request, $user);
 
         Auth::login($user, $remember);
         $request->session()->regenerate();
 
-        return redirect()->intended('dashboard');
+        $redirect = redirect()->intended('dashboard');
+
+        if ($intent === self::TWO_FACTOR_INTENT_REGISTER) {
+            return $redirect->with('success', 'Registration completed successfully.');
+        }
+
+        return $redirect;
     }
 
     public function resendTwoFactorChallenge(Request $request)
@@ -192,6 +205,7 @@ class AuthController extends Controller
             $request,
             $user,
             (bool) $request->session()->get(self::TWO_FACTOR_REMEMBER, false),
+            $this->getPendingTwoFactorIntent($request),
             'Мы отправили новый код подтверждения.',
         );
     }
@@ -264,7 +278,7 @@ class AuthController extends Controller
             ->with('success', 'Пароль успешно изменён.');
     }
 
-    private function startTwoFactorChallenge(Request $request, User $user, bool $remember, string $message)
+    private function startTwoFactorChallenge(Request $request, User $user, bool $remember, string $intent, string $message)
     {
         $code = (string) random_int(100000, 999999);
 
@@ -277,10 +291,11 @@ class AuthController extends Controller
         $request->session()->put([
             self::TWO_FACTOR_USER_ID => $user->getKey(),
             self::TWO_FACTOR_REMEMBER => $remember,
+            self::TWO_FACTOR_INTENT => $intent,
         ]);
 
         try {
-            $user->notify(new EmailTwoFactorCodeNotification($code, self::TWO_FACTOR_TTL_MINUTES));
+            $user->notify(new EmailTwoFactorCodeNotification($code, self::TWO_FACTOR_TTL_MINUTES, $intent));
         } catch (Throwable $exception) {
             Log::error('Не удалось отправить email-код для двухфакторной аутентификации.', [
                 'user_id' => $user->getKey(),
@@ -315,11 +330,23 @@ class AuthController extends Controller
         return $user;
     }
 
+    private function getPendingTwoFactorIntent(Request $request): string
+    {
+        $intent = $request->session()->get(self::TWO_FACTOR_INTENT, self::TWO_FACTOR_INTENT_LOGIN);
+
+        if (! in_array($intent, [self::TWO_FACTOR_INTENT_LOGIN, self::TWO_FACTOR_INTENT_REGISTER], true)) {
+            return self::TWO_FACTOR_INTENT_LOGIN;
+        }
+
+        return $intent;
+    }
+
     private function clearTwoFactorChallenge(Request $request, ?User $user = null): void
     {
         $request->session()->forget([
             self::TWO_FACTOR_USER_ID,
             self::TWO_FACTOR_REMEMBER,
+            self::TWO_FACTOR_INTENT,
         ]);
 
         if ($user) {

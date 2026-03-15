@@ -1,9 +1,13 @@
+@php
+    $isRegistrationFlow = ($intent ?? 'login') === 'register';
+@endphp
+
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Код подтверждения входа</title>
+    <title>{{ $isRegistrationFlow ? 'Registration verification code' : 'Login verification code' }}</title>
 </head>
 <body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;color:#111827;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px;">
@@ -15,7 +19,7 @@
                 </tr>
                 <tr>
                     <td style="font-size:16px;line-height:1.55;padding-bottom:16px;">
-                        Для завершения входа введите одноразовый код подтверждения:
+                        Enter this one-time code to {{ $isRegistrationFlow ? 'complete your registration' : 'complete your login' }}:
                     </td>
                 </tr>
                 <tr>
@@ -27,8 +31,8 @@
                 </tr>
                 <tr>
                     <td style="font-size:14px;color:#374151;line-height:1.55;">
-                        Код действует {{ $expiresInMinutes }} минут.<br>
-                        Если это были не вы, просто проигнорируйте письмо.
+                        This code expires in {{ $expiresInMinutes }} minutes.<br>
+                        If this was not you, you can safely ignore this email.
                     </td>
                 </tr>
             </table>

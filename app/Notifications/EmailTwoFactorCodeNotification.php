@@ -13,6 +13,7 @@ class EmailTwoFactorCodeNotification extends Notification
     public function __construct(
         public string $code,
         public int $expiresInMinutes = 10,
+        public string $intent = 'login',
     ) {
     }
 
@@ -23,12 +24,15 @@ class EmailTwoFactorCodeNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
+        $isRegistrationFlow = $this->intent === 'register';
+
         return (new MailMessage)
-            ->subject('Код подтверждения входа')
+            ->subject($isRegistrationFlow ? 'Registration verification code' : 'Login verification code')
             ->view('emails.two-factor-code', [
                 'code' => $this->code,
                 'expiresInMinutes' => $this->expiresInMinutes,
                 'appName' => config('app.name', 'Car Diary'),
+                'intent' => $this->intent,
             ]);
     }
 }
